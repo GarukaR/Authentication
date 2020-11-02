@@ -13,15 +13,15 @@ app.use(bodyParser.urlencoded({extended:true}));
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 
-const encrypt = require('mongoose-encryption');
+const md5 = require('md5');
+const bcrypt = require('bcryptjs');
+const saltRounds = 10;
 // =====================
 // Creating Schema and model
 const userSchema = new mongoose.Schema({
     email:String,
     password:String
 });
-
-userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']});
 
 const User = mongoose.model('User', userSchema);
 
@@ -46,11 +46,14 @@ app.route('/login')
         User.findOne({email:username}, function(err, foundUser){
             if(!err){
                 if(foundUser){
-                    if(foundUser.password === password){
-                        res.render('secrets')
-                    }else{
-                        console.log('Incorrect Password or Username!')
-                    }
+                    bcrypt.compare(password, foundUser.password, function(err, result) {
+                        if (result === true){
+                            res.render('secrets');
+                        }else{
+                            console.log("Entered password is wrong!");
+                            console.log(err);
+                        }
+                    });
                 }else{
                     res.redirect('/')
                     console.log('No Matching Users with that login email.Please Register First!');
@@ -68,21 +71,23 @@ app.route('/register')
     })
 
     .post(function(req, res){
-        username = req.body.username
-        password = req.body.password
-        User.countDocuments({email:username}, function(err,NoOfUsers){
-            if(NoOfUsers===0){
-                const newUser = new User({
-                    email:username,
-                    password:password
-                });
-                newUser.save();
-                console.log('Successfully registered the user!');
-                res.render('secrets')
-            }else{
-                console.log('Registeration unsuccessfull!');
-            }
-        })
+        bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+            username = req.body.username;
+            password = hash;
+            User.countDocuments({email:username}, function(err,NoOfUsers){
+                if(NoOfUsers===0){
+                    const newUser = new User({
+                        email:username,
+                        password:password
+                    });
+                    newUser.save();
+                    console.log('Successfully registered the user!');
+                    res.render('secrets')
+                }else{
+                    console.log('Registeration unsuccessfull!');
+                }
+            })
+        });
 
     });
 
